@@ -78,4 +78,42 @@ public class UserServiceImpl implements UserDetailsService, UserService {
         List<User> users = userRepository.findAll();
         return modelMapper.map(users, new TypeToken<List<UserDTO>>(){}.getType());
     }
+
+    @Override
+    public UserDTO updateUser(UserDTO userDTO) {
+
+        // check user exists by email
+        if (userRepository.existsByEmail(userDTO.getEmail())) {
+
+            User existingUser = userRepository.findByEmail(userDTO.getEmail());
+
+            // update only allowed fields
+            existingUser.setName(userDTO.getName());
+            existingUser.setRole(userDTO.getRole());
+
+            // update password only if user sends new one
+            if (userDTO.getPassword() != null && !userDTO.getPassword().isBlank()) {
+                BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+                existingUser.setPassword(encoder.encode(userDTO.getPassword()));
+            }
+
+            userRepository.save(existingUser);
+
+            return modelMapper.map(existingUser, UserDTO.class);
+        }
+
+        return null;
+    }
+
+
+    @Override
+    public int deleteUser(String email) {
+        if (userRepository.existsByEmail(email)) {
+            userRepository.deleteByEmail(email);
+            return VarList.OK;
+        } else {
+            return VarList.Not_Found;
+        }
+    }
+
 }
