@@ -17,7 +17,7 @@ public class Employee {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private int id;
+    private Integer id;
 
     private String name;
 
@@ -30,9 +30,9 @@ public class Employee {
 
     private String status;  // ACTIVE / INACTIVE
 
-    // USER RELATION (1:1)
-    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL)
-    @JoinColumn(name = "user_id", referencedColumnName = "uid", nullable = false)
+    // Remove the cascade and make it read-only
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", referencedColumnName = "uid")
     private User user;
 
     @OneToMany(mappedBy = "employee", cascade = CascadeType.ALL)

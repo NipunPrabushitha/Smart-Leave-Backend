@@ -13,28 +13,28 @@ import java.time.LocalDate;
 @NoArgsConstructor
 @AllArgsConstructor
 public class LeaveRequest {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
 
-    // EMPLOYEE RELATION (Many-to-One)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "employee_id", nullable = false)
     private Employee employee;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private String leaveType;  // CASUAL, SICK, ANNUAL
+    private LeaveType leaveType; // CASUAL, SICK, ANNUAL
 
-    @Column(nullable = false)
     private LocalDate startDate;
 
-    @Column(nullable = false)
     private LocalDate endDate;
 
-    @Column(columnDefinition = "TEXT")
     private String reason;
 
-    private LocalDate appliedDate;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private LeaveStatus status; // PENDING, APPROVED, REJECTED
 
-    private String status;  // PENDING, APPROVED, REJECTED
+    private LocalDate appliedDate;
 }
