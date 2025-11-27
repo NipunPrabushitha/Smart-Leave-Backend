@@ -155,6 +155,14 @@ public class AdminController {
     @GetMapping("/leave-requests/status/{status}")
     public ResponseEntity<ResponseDTO> getLeaveRequestsByStatus(@PathVariable String status) {
         try {
+            // Validate status parameter
+            if (!status.equalsIgnoreCase("PENDING") &&
+                    !status.equalsIgnoreCase("APPROVED") &&
+                    !status.equalsIgnoreCase("REJECTED")) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(new ResponseDTO(VarList.Bad_Request, "Status must be PENDING, APPROVED, or REJECTED", null));
+            }
+
             List<LeaveRequestDTO> leaveRequests = leaveRequestService.getLeaveRequestsByStatus(status);
             return ResponseEntity.ok(
                     new ResponseDTO(VarList.OK, "Success", leaveRequests)
@@ -165,13 +173,34 @@ public class AdminController {
         }
     }
 
+    // Get specific leave request by ID
+    @GetMapping("/leave-requests/{id}")
+    public ResponseEntity<ResponseDTO> getLeaveRequestById(@PathVariable int id) {
+        try {
+            LeaveRequestDTO leaveRequest = leaveRequestService.getLeaveRequestById(id);
+
+            if (leaveRequest == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(new ResponseDTO(VarList.Not_Found, "Leave request not found", null));
+            }
+
+            return ResponseEntity.ok(
+                    new ResponseDTO(VarList.OK, "Success", leaveRequest)
+            );
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ResponseDTO(VarList.Internal_Server_Error, e.getMessage(), null));
+        }
+    }
+
+    // Update leave status (Approve/Reject)
     @PatchMapping("/leave-requests/{leaveId}/status")
     public ResponseEntity<ResponseDTO> updateLeaveStatus(
             @PathVariable int leaveId,
             @RequestParam String status) {
         try {
             // Validate status
-            if (!status.equals("APPROVED") && !status.equals("REJECTED")) {
+            if (!status.equalsIgnoreCase("APPROVED") && !status.equalsIgnoreCase("REJECTED")) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(new ResponseDTO(VarList.Bad_Request, "Status must be APPROVED or REJECTED", null));
             }
@@ -179,8 +208,31 @@ public class AdminController {
             int res = leaveRequestService.updateLeaveStatus(leaveId, status);
 
             if (res == VarList.OK) {
+                // Get updated leave request to return in response
+                LeaveRequestDTO updatedRequest = leaveRequestService.getLeaveRequestById(leaveId);
                 return ResponseEntity.ok(
-                        new ResponseDTO(VarList.OK, "Leave request " + status.toLowerCase() + " successfully", null)
+                        new ResponseDTO(VarList.OK, "Leave request " + status.toLowerCase() + " successfully", updatedRequest)
+                );
+            }
+
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ResponseDTO(VarList.Not_Found, "Leave request not found", null));
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ResponseDTO(VarList.Internal_Server_Error, e.getMessage(), null));
+        }
+    }
+
+    // Delete leave request
+    @DeleteMapping("/leave-requests/{id}")
+    public ResponseEntity<ResponseDTO> deleteLeaveRequest(@PathVariable int id) {
+        try {
+            int res = leaveRequestService.deleteLeaveRequest(id);
+
+            if (res == VarList.OK) {
+                return ResponseEntity.ok(
+                        new ResponseDTO(VarList.OK, "Leave request deleted successfully", null)
                 );
             }
 

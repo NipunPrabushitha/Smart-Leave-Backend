@@ -17,6 +17,17 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Inte
     @Query("SELECT lr FROM LeaveRequest lr WHERE lr.employee.email = :email")
     List<LeaveRequest> findByEmployeeEmail(@Param("email") String email);
 
+
+    //Using native query
+    /*
+    @Query(value = "SELECT * FROM leave_request lr " +
+            "INNER JOIN employee e ON lr.employee_id = e.id " +
+            "WHERE e.email = :email", nativeQuery = true)
+    List<LeaveRequest> findByEmployeeEmail(@Param("email") String email);
+    */
+
+
+
     @Query("SELECT lr FROM LeaveRequest lr ORDER BY lr.appliedDate DESC")
     List<LeaveRequest> findAllOrderByAppliedDateDesc();
 }
