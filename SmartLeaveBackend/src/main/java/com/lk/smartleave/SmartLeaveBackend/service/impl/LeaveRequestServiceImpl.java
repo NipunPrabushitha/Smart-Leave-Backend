@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -101,6 +102,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         }
         return VarList.Not_Found;
     }
+
 
     @Override
     @Transactional(readOnly = true) // Read-only transaction for queries
@@ -219,6 +221,18 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
             return VarList.Bad_Request; // Invalid status value
         } catch (Exception e) {
             return VarList.Internal_Server_Error; // Other errors
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Object[]> findEmployeesWithMoreThan5LeavesInLast30Days() {
+        try {
+            return leaveRequestRepository.findEmployeesWithMoreThan5LeavesInLast30Days();
+        } catch (Exception e) {
+            // Log the error and return empty list
+            System.err.println("Error fetching frequent leave takers: " + e.getMessage());
+            return new ArrayList<>();
         }
     }
 }

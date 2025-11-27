@@ -30,4 +30,15 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Inte
 
     @Query("SELECT lr FROM LeaveRequest lr ORDER BY lr.appliedDate DESC")
     List<LeaveRequest> findAllOrderByAppliedDateDesc();
+
+    @Query(value = "SELECT e.id, e.name, e.email, e.department, " +
+            "COUNT(lr.id) as leave_count " +
+            "FROM employees e " +
+            "INNER JOIN leave_requests lr ON e.id = lr.employee_id " +
+            "WHERE lr.start_date >= DATE_SUB(CURRENT_DATE, INTERVAL 30 DAY) " +
+            "AND lr.status IN ('APPROVED', 'PENDING') " +  // Both statuses
+            "GROUP BY e.id, e.name, e.email, e.department " +
+            "HAVING COUNT(lr.id) > 5",
+            nativeQuery = true)
+    List<Object[]> findEmployeesWithMoreThan5LeavesInLast30Days();
 }

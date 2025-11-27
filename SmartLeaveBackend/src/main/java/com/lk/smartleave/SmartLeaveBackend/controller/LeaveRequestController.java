@@ -10,7 +10,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @CrossOrigin("*")
@@ -245,6 +248,46 @@ public class LeaveRequestController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ResponseDTO(VarList.Internal_Server_Error, e.getMessage(), null));
+        }
+    }
+    @GetMapping("/analytics/frequent-leave-takers")
+    public ResponseEntity<ResponseDTO> getFrequentLeaveTakers(HttpServletRequest request) {
+        try {
+            String role = (String) request.getAttribute("role");
+
+            // Only allow ADMIN access to this analytics endpoint
+            if (!"ADMIN".equals(role)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(new ResponseDTO(VarList.Forbidden, "Admin access required", null));
+            }
+
+            List<Object[]> results = leaveRequestService.findEmployeesWithMoreThan5LeavesInLast30Days();
+
+            if (results.isEmpty()) {
+                return ResponseEntity.ok(
+                        new ResponseDTO(VarList.OK, "No employees found with more than 5 leaves in last 30 days", new ArrayList<>())
+                );
+            }
+
+            // Convert Object[] to readable format
+            List<Map<String, Object>> formattedResults = new ArrayList<>();
+            for (Object[] result : results) {
+                Map<String, Object> employeeData = new HashMap<>();
+                employeeData.put("employeeId", result[0]);
+                employeeData.put("employeeName", result[1]);
+                employeeData.put("employeeEmail", result[2]);
+                employeeData.put("department", result[3]);
+                employeeData.put("leaveCount", result[4]);
+                formattedResults.add(employeeData);
+            }
+
+            return ResponseEntity.ok(
+                    new ResponseDTO(VarList.OK, "Frequent leave takers analysis completed", formattedResults)
+            );
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ResponseDTO(VarList.Internal_Server_Error, "Error analyzing frequent leave takers: " + e.getMessage(), null));
         }
     }
 }

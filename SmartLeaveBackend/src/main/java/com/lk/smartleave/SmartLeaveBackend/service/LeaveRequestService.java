@@ -17,4 +17,5 @@ public interface LeaveRequestService {
     boolean isLeaveRequestOwnedByUser(int leaveId, String userEmail);
     List<LeaveRequestDTO> getLeaveRequestsByUserEmail(String userEmail);
     int updateLeaveStatus(int leaveId, String status);
+    List<Object[]> findEmployeesWithMoreThan5LeavesInLast30Days();
 }
