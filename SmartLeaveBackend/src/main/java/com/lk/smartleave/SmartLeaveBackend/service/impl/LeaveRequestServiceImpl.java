@@ -1,9 +1,10 @@
 package com.lk.smartleave.SmartLeaveBackend.service.impl;
 
+import com.lk.smartleave.SmartLeaveBackend.dto.LeavePaginationResponseDTO;
 import com.lk.smartleave.SmartLeaveBackend.dto.LeaveRequestDTO;
+import com.lk.smartleave.SmartLeaveBackend.dto.PaginationRequestDTO;
 import com.lk.smartleave.SmartLeaveBackend.dto.ResponseDTO;
 import com.lk.smartleave.SmartLeaveBackend.entity.Employee;
-import com.lk.smartleave.SmartLeaveBackend.entity.EmployeeStatus;
 import com.lk.smartleave.SmartLeaveBackend.entity.LeaveRequest;
 import com.lk.smartleave.SmartLeaveBackend.entity.LeaveStatus;
 import com.lk.smartleave.SmartLeaveBackend.entity.LeaveType;
@@ -12,6 +13,10 @@ import com.lk.smartleave.SmartLeaveBackend.repo.LeaveRequestRepository;
 import com.lk.smartleave.SmartLeaveBackend.service.LeaveRequestService;
 import com.lk.smartleave.SmartLeaveBackend.util.VarList;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,7 +27,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
-@Transactional // Add class-level transactional
+@Transactional
 public class LeaveRequestServiceImpl implements LeaveRequestService {
 
     @Autowired
@@ -31,23 +36,21 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
     @Autowired
     private EmployeeRepository employeeRepository;
 
+    // ========== EXISTING METHODS (UNCHANGED) ==========
     @Override
-    @Transactional // Ensure transaction for save
+    @Transactional
     public ResponseDTO saveLeaveRequest(LeaveRequestDTO leaveRequestDTO) {
         try {
-            // Find employee by email
             Optional<Employee> employee = employeeRepository.findByEmail(leaveRequestDTO.getEmployeeEmail());
             if (employee.isEmpty()) {
                 return new ResponseDTO(VarList.Not_Found, "Employee not found", null);
             }
 
-            // Check if employee is ACTIVE
             Employee emp = employee.get();
             if (!"ACTIVE".equals(emp.getStatus().toString())) {
                 return new ResponseDTO(VarList.Not_Acceptable, "Employee is not active", null);
             }
 
-            // Create and save leave request
             LeaveRequest leaveRequest = new LeaveRequest();
             leaveRequest.setEmployee(emp);
             leaveRequest.setLeaveType(LeaveType.valueOf(leaveRequestDTO.getLeaveType()));
@@ -58,14 +61,11 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
             leaveRequest.setAppliedDate(LocalDate.now());
 
             LeaveRequest savedRequest = leaveRequestRepository.save(leaveRequest);
-
-            // Convert saved entity to DTO with all fields
             LeaveRequestDTO savedDTO = convertToDTO(savedRequest);
 
             return new ResponseDTO(VarList.Created, "Leave request created successfully", savedDTO);
 
         } catch (Exception e) {
-
             return new ResponseDTO(VarList.Internal_Server_Error, e.getMessage(), null);
         }
     }
@@ -81,7 +81,6 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
             request.setEndDate(leaveRequestDTO.getEndDate());
             request.setReason(leaveRequestDTO.getReason());
 
-            // Only allow status update if it's provided
             if (leaveRequestDTO.getStatus() != null) {
                 request.setStatus(LeaveStatus.valueOf(leaveRequestDTO.getStatus()));
             }
@@ -103,9 +102,8 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         return VarList.Not_Found;
     }
 
-
     @Override
-    @Transactional(readOnly = true) // Read-only transaction for queries
+    @Transactional(readOnly = true)
     public List<LeaveRequestDTO> getAllLeaveRequests() {
         List<LeaveRequest> leaveRequests = leaveRequestRepository.findAllOrderByAppliedDateDesc();
         return convertToDTOList(leaveRequests);
@@ -159,7 +157,149 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         return convertToDTOList(leaveRequests);
     }
 
-    // Helper method to convert single entity to DTO
+    @Override
+    @Transactional
+    public int updateLeaveStatus(int leaveId, String status) {
+        try {
+            Optional<LeaveRequest> leaveRequest = leaveRequestRepository.findById(leaveId);
+            if (leaveRequest.isEmpty()) {
+                return VarList.Not_Found;
+            }
+
+            if (!status.equalsIgnoreCase("APPROVED") && !status.equalsIgnoreCase("REJECTED")) {
+                return VarList.Bad_Request;
+            }
+
+            LeaveRequest request = leaveRequest.get();
+            request.setStatus(LeaveStatus.valueOf(status.toUpperCase()));
+            leaveRequestRepository.save(request);
+
+            return VarList.OK;
+        } catch (IllegalArgumentException e) {
+            return VarList.Bad_Request;
+        } catch (Exception e) {
+            return VarList.Internal_Server_Error;
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Object[]> findEmployeesWithMoreThan5LeavesInLast30Days() {
+        try {
+            return leaveRequestRepository.findEmployeesWithMoreThan5LeavesInLast30Days();
+        } catch (Exception e) {
+            System.err.println("Error fetching frequent leave takers: " + e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+
+    // ========== NEW PAGINATION METHODS ==========
+
+    @Override
+    @Transactional(readOnly = true)
+    public LeavePaginationResponseDTO getAllLeaveRequestsPaginated(PaginationRequestDTO paginationRequest) {
+        Pageable pageable = createPageable(paginationRequest);
+        Page<LeaveRequest> page = leaveRequestRepository.findAllOrderByAppliedDateDesc(pageable);
+        return convertPageToResponse(page);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public LeavePaginationResponseDTO getLeaveRequestsByEmployeePaginated(int employeeId, PaginationRequestDTO paginationRequest) {
+        Pageable pageable = createPageable(paginationRequest);
+        Page<LeaveRequest> page = leaveRequestRepository.findByEmployeeId(employeeId, pageable);
+        return convertPageToResponse(page);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public LeavePaginationResponseDTO getLeaveRequestsByStatusPaginated(String status, PaginationRequestDTO paginationRequest) {
+        Pageable pageable = createPageable(paginationRequest);
+        Page<LeaveRequest> page = leaveRequestRepository.findByStatus(
+                LeaveStatus.valueOf(status.toUpperCase()),
+                pageable
+        );
+        return convertPageToResponse(page);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public LeavePaginationResponseDTO getLeaveRequestsByUserEmailPaginated(String userEmail, PaginationRequestDTO paginationRequest) {
+        Pageable pageable = createPageable(paginationRequest);
+        Page<LeaveRequest> page = leaveRequestRepository.findByEmployeeEmail(userEmail, pageable);
+        return convertPageToResponse(page);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public LeavePaginationResponseDTO filterLeaveRequests(
+            Integer employeeId,
+            String status,
+            String leaveType,
+            String employeeEmail,
+            PaginationRequestDTO paginationRequest) {
+
+        Pageable pageable = createPageable(paginationRequest);
+        LeaveStatus leaveStatus = null;
+
+        if (status != null && !status.isEmpty()) {
+            try {
+                leaveStatus = LeaveStatus.valueOf(status.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                // If invalid status, ignore it
+            }
+        }
+
+        Page<LeaveRequest> page = leaveRequestRepository.findWithFilters(
+                employeeId,
+                leaveStatus,
+                leaveType,
+                employeeEmail,
+                pageable
+        );
+
+        return convertPageToResponse(page);
+    }
+
+    // ========== HELPER METHODS ==========
+
+    private Pageable createPageable(PaginationRequestDTO paginationRequest) {
+        Sort.Direction direction = paginationRequest.isAscending()
+                ? Sort.Direction.ASC
+                : Sort.Direction.DESC;
+
+        // Validate sort field to prevent SQL injection
+        String sortField = paginationRequest.getSortBy();
+        List<String> validSortFields = List.of("id", "startDate", "endDate", "appliedDate", "status");
+
+        if (!validSortFields.contains(sortField)) {
+            sortField = "id"; // Default to id if invalid field
+        }
+
+        Sort sort = Sort.by(direction, sortField);
+
+        return PageRequest.of(
+                paginationRequest.getPage(),
+                paginationRequest.getSize(),
+                sort
+        );
+    }
+
+    private LeavePaginationResponseDTO convertPageToResponse(Page<LeaveRequest> page) {
+        List<LeaveRequestDTO> content = convertToDTOList(page.getContent());
+
+        return new LeavePaginationResponseDTO(
+                content,
+                page.getNumber(),
+                page.getSize(),
+                page.getTotalElements(),
+                page.getTotalPages(),
+                page.hasNext(),
+                page.hasPrevious()
+        );
+    }
+
+    // Existing helper methods (keep these)
     private LeaveRequestDTO convertToDTO(LeaveRequest leaveRequest) {
         if (leaveRequest == null) {
             return null;
@@ -168,7 +308,6 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         LeaveRequestDTO dto = new LeaveRequestDTO();
         dto.setId(leaveRequest.getId());
 
-        // Eagerly fetch the employee relationship within transaction
         if (leaveRequest.getEmployee() != null) {
             Employee employee = leaveRequest.getEmployee();
             dto.setEmployeeId(employee.getId());
@@ -192,54 +331,9 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         return dto;
     }
 
-    // Helper method to convert list of entities to DTOs
     private List<LeaveRequestDTO> convertToDTOList(List<LeaveRequest> leaveRequests) {
         return leaveRequests.stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
     }
-    @Override
-    @Transactional
-    public int updateLeaveStatus(int leaveId, String status) {
-        try {
-            Optional<LeaveRequest> leaveRequest = leaveRequestRepository.findById(leaveId);
-            if (leaveRequest.isEmpty()) {
-                return VarList.Not_Found; // Leave request not found
-            }
-
-            // Validate status
-            if (!status.equalsIgnoreCase("APPROVED") && !status.equalsIgnoreCase("REJECTED")) {
-                return VarList.Bad_Request; // Invalid status
-            }
-
-            LeaveRequest request = leaveRequest.get();
-            request.setStatus(LeaveStatus.valueOf(status.toUpperCase()));
-            leaveRequestRepository.save(request);
-
-            return VarList.OK; // Success
-        } catch (IllegalArgumentException e) {
-            return VarList.Bad_Request; // Invalid status value
-        } catch (Exception e) {
-            return VarList.Internal_Server_Error; // Other errors
-        }
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<Object[]> findEmployeesWithMoreThan5LeavesInLast30Days() {
-        try {
-            return leaveRequestRepository.findEmployeesWithMoreThan5LeavesInLast30Days();
-        } catch (Exception e) {
-            // Log the error and return empty list
-            System.err.println("Error fetching frequent leave takers: " + e.getMessage());
-            return new ArrayList<>();
-        }
-    }
 }
-
-
-
-
-
-/*
-!"ACTIVE".equals(emp.getStatus().toString())*/
